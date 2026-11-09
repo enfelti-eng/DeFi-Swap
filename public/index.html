@@ -1,0 +1,1784 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeonSwap | DEX DeFi</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.5/dist/ethers.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    :root, [data-theme="dark"] {
+      --bg:#050505; --bg-card:#0a0a0a; --bg-input:#111; --bg-hover:#1a1a1a;
+      --border:#1f1f1f; --border-light:#333; --text:#e5e5e5; --text-muted:#888;
+      --neon:#00ff41; --neon-glow:rgba(0,255,65,0.35); --header-bg:rgba(8,8,8,0.9);
+    }
+    [data-theme="light"] {
+      --bg:#f4f6f4; --bg-card:#fff; --bg-input:#f0f2f0; --bg-hover:#e8ebe8;
+      --border:#d4d8d4; --border-light:#c0c5c0; --text:#1a1a1a; --text-muted:#666;
+      --neon:#00a82d; --neon-glow:rgba(0,168,45,0.25); --header-bg:rgba(255,255,255,0.92);
+    }
+    body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--text); transition: background .25s, color .25s; }
+    .card { background: var(--bg-card); border-color: var(--border); }
+    .input-box { background: var(--bg-input); border-color: var(--border-light); }
+    .btn-ghost { background: var(--bg-hover); border-color: var(--border-light); }
+    .text-muted { color: var(--text-muted); }
+    .header-bar { background: var(--header-bg); border-color: var(--border); }
+    .glow-neon { box-shadow: 0 0 15px var(--neon-glow), 0 0 30px rgba(0,255,65,.1); }
+    .glow-neon-sm { box-shadow: 0 0 8px var(--neon-glow); }
+    input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-input); }
+    ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+    .tab-active { background: var(--neon); color: #000; box-shadow: 0 0 12px var(--neon-glow); }
+    .toast { animation: slideIn .3s ease, fadeOut .4s ease 2.6s forwards; }
+    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
+    .spin { animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .theme-icon-dark { display: none; }
+    [data-theme="light"] .theme-icon-light { display: none; }
+    [data-theme="light"] .theme-icon-dark { display: inline; }
+    .dropdown { position: relative; }
+    .dropdown-menu { display: none; position: absolute; right: 0; top: 110%; min-width: 180px; z-index: 50; }
+    .dropdown.open .dropdown-menu { display: block; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+<header class="border-b header-bar backdrop-blur sticky top-0 z-40">
+  <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2 shrink-0">
+      <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:var(--neon)"><span class="text-black font-black text-lg">N</span></div>
+      <span class="font-bold text-xl tracking-tight hidden sm:inline">Neon<span style="color:var(--neon)">Swap</span></span>
+    </div>
+
+    <nav class="hidden lg:flex items-center gap-1 rounded-xl p-1 border" style="background:var(--bg-input);border-color:var(--border)">
+      <button onclick="setTab('swap')" id="tab-swap" class="px-4 py-2 rounded-lg text-sm font-medium tab-active" data-i18n="tab_swap">Swap</button>
+      <button onclick="setTab('liquidity')" id="tab-liquidity" class="px-4 py-2 rounded-lg text-sm font-medium text-muted" data-i18n="tab_liquidity">Liquidez</button>
+      <button onclick="setTab('pools')" id="tab-pools" class="px-4 py-2 rounded-lg text-sm font-medium text-muted" data-i18n="tab_pools">Pools</button>
+      <button onclick="setTab('portfolio')" id="tab-portfolio" class="px-4 py-2 rounded-lg text-sm font-medium text-muted" data-i18n="tab_portfolio">Portfólio</button>
+    </nav>
+
+    <div class="flex items-center gap-1.5 sm:gap-2">
+      <!-- Network -->
+      <div class="dropdown" id="network-dropdown">
+        <button onclick="toggleDropdown('network-dropdown')" class="flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs sm:text-sm font-medium btn-ghost" id="network-btn">
+          <span id="network-icon">◈</span>
+          <span id="network-label" class="hidden sm:inline">Ethereum</span>
+          <svg class="w-3 h-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="dropdown-menu card border rounded-xl shadow-xl p-1 mt-1">
+          <button onclick="selectNetwork('ethereum')" class="w-full text-left px-3 py-2 rounded-lg text-sm hover:opacity-80 flex items-center gap-2">◈ Ethereum</button>
+          <button onclick="selectNetwork('base-sepolia')" class="w-full text-left px-3 py-2 rounded-lg text-sm hover:opacity-80 flex items-center gap-2">⬡ Base Sepolia · Teste</button>
+          <button onclick="selectNetwork('base')" class="w-full text-left px-3 py-2 rounded-lg text-sm hover:opacity-80 flex items-center gap-2">⬡ Base Mainnet</button>
+          <button onclick="selectNetwork('arbitrum')" class="w-full text-left px-3 py-2 rounded-lg text-sm hover:opacity-80 flex items-center gap-2">◆ Arbitrum</button>
+          <button onclick="selectNetwork('bsc')" class="w-full text-left px-3 py-2 rounded-lg text-sm hover:opacity-80 flex items-center gap-2">● BSC</button>
+          <button onclick="selectNetwork('polygon')" class="w-full text-left px-3 py-2 rounded-lg text-sm hover:opacity-80 flex items-center gap-2">⬡ Polygon</button>
+        </div>
+      </div>
+
+      <!-- Lang -->
+      <button onclick="toggleLang()" class="w-10 h-10 rounded-xl border flex items-center justify-center text-xs font-bold btn-ghost" id="lang-btn" title="Language">PT</button>
+
+      <!-- Theme -->
+      <button onclick="toggleTheme()" class="w-10 h-10 rounded-xl border flex items-center justify-center btn-ghost" title="Theme">
+        <span class="theme-icon-light text-lg">🌙</span>
+        <span class="theme-icon-dark text-lg">☀️</span>
+      </button>
+
+      <!-- Wallet -->
+      <button onclick="walletAction()" id="wallet-btn" class="font-semibold px-3 sm:px-5 py-2 rounded-xl text-xs sm:text-sm transition-all glow-neon-sm" style="background:var(--neon);color:#000" data-i18n="connect_wallet">
+        Conectar Carteira
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="lg:hidden flex justify-center gap-1 p-3 border-b overflow-x-auto" style="background:var(--bg-card);border-color:var(--border)">
+  <button onclick="setTab('swap')" id="mtab-swap" class="px-4 py-2 rounded-lg text-sm font-medium tab-active whitespace-nowrap" data-i18n="tab_swap">Swap</button>
+  <button onclick="setTab('liquidity')" id="mtab-liquidity" class="px-4 py-2 rounded-lg text-sm font-medium text-muted whitespace-nowrap" data-i18n="tab_liquidity">Liquidez</button>
+  <button onclick="setTab('pools')" id="mtab-pools" class="px-4 py-2 rounded-lg text-sm font-medium text-muted whitespace-nowrap" data-i18n="tab_pools">Pools</button>
+  <button onclick="setTab('portfolio')" id="mtab-portfolio" class="px-4 py-2 rounded-lg text-sm font-medium text-muted whitespace-nowrap" data-i18n="tab_portfolio">Portfólio</button>
+</div>
+
+<main class="flex-1 flex items-start justify-center px-4 py-8 gap-6 flex-wrap">
+
+  <!-- SWAP -->
+  <div id="panel-swap" class="w-full max-w-md">
+    <div class="card border rounded-3xl p-5 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold" data-i18n="tab_swap">Swap</h2>
+        <div class="flex items-center gap-2 text-xs text-muted">
+          <span>Slippage: <span id="slippage-value">0.5</span>%</span>
+          <button onclick="toggleSlippage()" style="color:var(--neon)">⚙️</button>
+        </div>
+      </div>
+
+      <!-- Mini price chart -->
+      <div class="mb-4 p-3 rounded-2xl" style="background:var(--bg-input)">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-xs text-muted" id="chart-pair-label">ETH / USDT</span>
+          <span class="text-xs font-medium" id="chart-price-change" style="color:var(--neon)">+2.4%</span>
+        </div>
+        <div style="height:90px"><canvas id="price-chart"></canvas></div>
+      </div>
+
+      <div class="input-box border rounded-2xl p-4 mb-2">
+        <div class="flex justify-between text-xs text-muted mb-2">
+          <span data-i18n="you_pay">Você paga</span>
+          <span data-i18n="balance">Saldo</span>: <span id="from-balance">—</span>
+          <button onclick="setMax('from')" class="ml-1 hover:underline" style="color:var(--neon)">MAX</button>
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="number" id="from-amount" placeholder="0.0" oninput="updateFromAmount()" class="flex-1 bg-transparent text-3xl font-medium outline-none placeholder:opacity-40" style="color:var(--text)" />
+          <button onclick="openModal('from')" class="flex items-center gap-2 btn-ghost border rounded-xl px-3 py-2">
+            <div id="from-icon" class="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">Ξ</div>
+            <span id="from-symbol" class="font-semibold text-sm">ETH</span>
+            <svg class="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+        </div>
+        <div class="text-right text-xs text-muted mt-1">≈ $<span id="from-usd">0.00</span></div>
+      </div>
+
+      <div class="flex justify-center -my-3 relative z-10">
+        <button onclick="switchTokens()" class="w-10 h-10 rounded-xl btn-ghost border flex items-center justify-center">
+          <svg class="w-5 h-5" style="color:var(--neon)" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+        </button>
+      </div>
+
+      <div class="input-box border rounded-2xl p-4 mt-2">
+        <div class="flex justify-between text-xs text-muted mb-2">
+          <span data-i18n="you_receive">Você recebe</span>
+          <span data-i18n="balance">Saldo</span>: <span id="to-balance">—</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="number" id="to-amount" placeholder="0.0" oninput="updateToAmount()" class="flex-1 bg-transparent text-3xl font-medium outline-none placeholder:opacity-40" style="color:var(--text)" />
+          <button onclick="openModal('to')" class="flex items-center gap-2 btn-ghost border rounded-xl px-3 py-2">
+            <div id="to-icon" class="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">₮</div>
+            <span id="to-symbol" class="font-semibold text-sm">USDT</span>
+            <svg class="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+        </div>
+        <div class="text-right text-xs text-muted mt-1">≈ $<span id="to-usd">0.00</span></div>
+      </div>
+
+      <div id="rate-info" class="mt-4 p-3 rounded-xl text-sm space-y-1.5 hidden" style="background:var(--bg-input)">
+        <div class="flex justify-between text-muted"><span data-i18n="rate">Taxa</span><span id="rate-text">—</span></div>
+        <div class="flex justify-between text-muted"><span data-i18n="swap_fee">Taxa de swap (0.3%)</span><span id="fee-text" style="color:var(--neon)">$0.00</span></div>
+        <div class="flex justify-between text-muted"><span data-i18n="price_impact">Impacto no preço</span><span style="color:var(--neon)">&lt;0.01%</span></div>
+        <div class="flex justify-between text-muted"><span data-i18n="min_received">Mínimo recebido</span><span id="min-received">—</span></div>
+        <div class="flex justify-between text-muted"><span data-i18n="network">Rede</span><span id="swap-network">Ethereum</span></div>
+      </div>
+
+      <button id="swap-btn" onclick="openConfirmSwap()" disabled class="w-full mt-5 font-bold py-4 rounded-2xl text-lg opacity-50 cursor-not-allowed" style="background:var(--bg-hover);color:var(--text-muted)" data-i18n="enter_amount">
+        Insira um valor
+      </button>
+    </div>
+
+    <div id="history-box" class="mt-6 card border rounded-2xl p-4 hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-medium text-muted" data-i18n="recent_history">Histórico recente</h3>
+        <button onclick="clearHistory()" class="text-xs hover:underline" style="color:var(--neon)" data-i18n="clear">Limpar</button>
+      </div>
+      <div id="history-list" class="space-y-2 text-sm"></div>
+      <p class="text-[10px] text-muted mt-3" data-i18n="saved_locally">Salvo automaticamente neste navegador</p>
+    </div>
+  </div>
+
+  <!-- LIQUIDITY -->
+  <div id="panel-liquidity" class="w-full max-w-md hidden">
+    <div class="card border rounded-3xl p-5 shadow-2xl">
+      <h2 class="text-lg font-semibold mb-5" data-i18n="add_liquidity">Adicionar Liquidez</h2>
+
+      <div class="input-box border rounded-2xl p-4 mb-3">
+        <div class="flex justify-between text-xs text-muted mb-2">
+          <span>Token A</span>
+          <span data-i18n="balance">Saldo</span>: <span id="liq-a-balance">—</span>
+          <button onclick="setMaxLiq('a')" class="ml-1 hover:underline" style="color:var(--neon)">MAX</button>
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="number" id="liq-a" placeholder="0.0" oninput="updateLiqA()" class="flex-1 bg-transparent text-2xl font-medium outline-none placeholder:opacity-40" style="color:var(--text)" />
+          <button onclick="openModal('liqA')" class="flex items-center gap-2 btn-ghost border rounded-xl px-3 py-2">
+            <div id="liq-a-icon" class="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">Ξ</div>
+            <span id="liq-a-symbol" class="font-semibold text-sm">ETH</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex justify-center my-1"><div class="w-8 h-8 rounded-full btn-ghost border flex items-center justify-center text-lg" style="color:var(--neon)">+</div></div>
+
+      <div class="input-box border rounded-2xl p-4 mb-4">
+        <div class="flex justify-between text-xs text-muted mb-2">
+          <span>Token B</span>
+          <span data-i18n="balance">Saldo</span>: <span id="liq-b-balance">—</span>
+          <button onclick="setMaxLiq('b')" class="ml-1 hover:underline" style="color:var(--neon)">MAX</button>
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="number" id="liq-b" placeholder="0.0" oninput="updateLiqB()" class="flex-1 bg-transparent text-2xl font-medium outline-none placeholder:opacity-40" style="color:var(--text)" />
+          <button onclick="openModal('liqB')" class="flex items-center gap-2 btn-ghost border rounded-xl px-3 py-2">
+            <div id="liq-b-icon" class="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">₮</div>
+            <span id="liq-b-symbol" class="font-semibold text-sm">USDT</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="liq-info" class="p-3 rounded-xl text-sm space-y-2 mb-4 hidden" style="background:var(--bg-input)">
+        <div class="flex justify-between text-muted"><span data-i18n="ratio">Proporção</span><span id="liq-ratio">—</span></div>
+        <div class="flex justify-between text-muted"><span data-i18n="pool_share">Participação no pool</span><span id="liq-share" style="color:var(--neon)">~0.00%</span></div>
+        <div class="flex justify-between text-muted"><span data-i18n="est_fees">Taxas estimadas (24h)</span><span id="liq-fees" style="color:var(--neon)">+$0.00</span></div>
+        <div class="flex justify-between text-muted"><span>APR</span><span style="color:var(--neon)">18.4%</span></div>
+        <div class="flex justify-between text-muted"><span data-i18n="il_estimate">Impermanent Loss (est.)</span><span id="liq-il" style="color:#f59e0b">0.00%</span></div>
+      </div>
+
+      <button id="liq-btn" onclick="addLiquidity()" disabled class="w-full font-bold py-4 rounded-2xl text-lg opacity-50 cursor-not-allowed" style="background:var(--bg-hover);color:var(--text-muted)" data-i18n="enter_values">
+        Insira os valores
+      </button>
+    </div>
+
+    <div class="mt-6 card border rounded-2xl p-4">
+      <h3 class="text-sm font-medium text-muted mb-3" data-i18n="your_pools">Seus pools</h3>
+      <div id="my-pools" class="space-y-2"><div class="text-center text-muted text-sm py-6" data-i18n="no_pools">Nenhum pool ativo ainda</div></div>
+    </div>
+  </div>
+
+  <!-- POOLS -->
+  <div id="panel-pools" class="w-full max-w-2xl hidden">
+    <div class="card border rounded-3xl p-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-semibold" data-i18n="tab_pools">Pools de Liquidez</h2>
+        <span class="text-xs text-muted">Fee 0.3% · <span id="pools-network">Ethereum</span></span>
+      </div>
+      <div id="pools-list" class="space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- PORTFOLIO -->
+  <div id="panel-portfolio" class="w-full max-w-2xl hidden">
+    <div class="card border rounded-3xl p-6 shadow-2xl">
+      <h2 class="text-lg font-semibold mb-1" data-i18n="tab_portfolio">Portfólio</h2>
+      <div class="mb-5 p-4 rounded-2xl border" style="background:var(--bg-input);border-color:var(--border)">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <div class="font-semibold text-sm">Carteira on-chain · <span id="chain-network-name">Base Sepolia</span></div>
+          <div class="text-[10px] text-muted mt-1">Leitura de saldo ETH · operações de swap e liquidez continuam em modo demonstração</div>
+          <span id="chain-status" class="text-xs px-2 py-1 rounded-lg" style="background:var(--bg-hover);color:var(--text-muted)">Aguardando conexão</span>
+        </div>
+        <div class="text-xs text-muted mb-1">Endereço</div>
+        <div id="chain-address" class="text-sm font-mono break-all mb-3">—</div>
+        <div class="flex items-end justify-between gap-3">
+          <div><div class="text-xs text-muted mb-1">Saldo nativo consultado na Base</div><div class="text-2xl font-bold" style="color:var(--neon)"><span id="chain-eth-balance">—</span> ETH</div></div>
+          <div class="flex flex-col items-end gap-2">
+            <button type="button" onclick="refreshOnChainWallet()" class="text-xs underline" style="color:var(--neon)">Atualizar saldo</button>
+            <a id="chain-explorer-link" href="https://basescan.org" target="_blank" rel="noopener noreferrer" class="text-xs underline" style="color:var(--neon)">Ver no BaseScan ↗</a>
+          </div>
+        </div>
+        <div id="chain-last-update" class="text-[10px] text-muted mt-3">Os dados serão carregados após conectar a carteira.</div>
+      </div>
+      <p class="text-3xl font-bold mb-1" style="color:var(--neon)">$<span id="portfolio-total">0.00</span></p>
+      <p class="text-sm text-muted mb-6"><span id="portfolio-change" style="color:var(--neon)">—</span></p>
+      <div class="mb-6 p-4 rounded-2xl" style="background:var(--bg-input)">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-medium text-muted" data-i18n="allocation">Alocação</h3>
+          <div class="flex gap-2 text-xs">
+            <button onclick="setChartType('doughnut')" id="chart-btn-doughnut" class="px-2 py-1 rounded-lg tab-active">Pizza</button>
+            <button onclick="setChartType('bar')" id="chart-btn-bar" class="px-2 py-1 rounded-lg text-muted">Barras</button>
+          </div>
+        </div>
+        <div style="height:220px"><canvas id="portfolio-chart"></canvas></div>
+      </div>
+      <div id="portfolio-list" class="space-y-2"></div>
+    </div>
+  </div>
+</main>
+
+<!-- Token Modal -->
+<div id="token-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden" onclick="closeModal()">
+  <div class="card border rounded-2xl w-full max-w-md mx-4 max-h-[70vh] overflow-hidden shadow-2xl" onclick="event.stopPropagation()">
+    <div class="p-4 border-b flex items-center justify-between" style="border-color:var(--border)">
+      <h3 class="font-semibold text-lg" data-i18n="select_token">Selecionar token</h3>
+      <button onclick="closeModal()" class="text-muted text-xl">×</button>
+    </div>
+    <div class="p-3">
+      <input id="token-search" type="text" placeholder="Buscar..." oninput="filterTokens()" class="w-full border rounded-xl px-4 py-2.5 text-sm outline-none" style="background:var(--bg-input);border-color:var(--border);color:var(--text)" />
+    </div>
+    <div id="token-list" class="p-2 overflow-y-auto max-h-[50vh]"></div>
+  </div>
+</div>
+
+<!-- Confirm Swap -->
+<div id="confirm-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden">
+  <div class="card border rounded-2xl w-full max-w-sm mx-4 p-6 shadow-2xl">
+    <h3 class="font-semibold text-lg mb-4" data-i18n="confirm_swap">Confirmar Swap</h3>
+    <div class="space-y-3 text-sm mb-6">
+      <div class="flex justify-between"><span class="text-muted" data-i18n="you_pay">Você paga</span><span id="confirm-from" class="font-medium"></span></div>
+      <div class="flex justify-between"><span class="text-muted" data-i18n="you_receive">Você recebe</span><span id="confirm-to" class="font-medium" style="color:var(--neon)"></span></div>
+      <div class="flex justify-between"><span class="text-muted">Fee</span><span id="confirm-fee"></span></div>
+      <div class="flex justify-between"><span class="text-muted">Slippage</span><span id="confirm-slippage"></span></div>
+      <div class="flex justify-between"><span class="text-muted" data-i18n="network">Rede</span><span id="confirm-network"></span></div>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="closeConfirm()" class="flex-1 py-3 rounded-xl border text-sm font-medium" style="border-color:var(--border-light)" data-i18n="cancel">Cancelar</button>
+      <button onclick="executeSwap()" id="confirm-btn" class="flex-1 py-3 rounded-xl text-sm font-bold" style="background:var(--neon);color:#000" data-i18n="confirm">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Remove LP -->
+<div id="remove-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden">
+  <div class="card border rounded-2xl w-full max-w-sm mx-4 p-6 shadow-2xl">
+    <h3 class="font-semibold text-lg mb-2" data-i18n="remove_liquidity">Remover Liquidez</h3>
+    <p class="text-sm text-muted mb-4" id="remove-pool-name"></p>
+    <div class="mb-4">
+      <div class="flex gap-2 mb-2">
+        <button onclick="setRemovePct(25)" class="flex-1 py-1.5 rounded-lg text-xs border btn-ghost">25%</button>
+        <button onclick="setRemovePct(50)" class="flex-1 py-1.5 rounded-lg text-xs border btn-ghost">50%</button>
+        <button onclick="setRemovePct(75)" class="flex-1 py-1.5 rounded-lg text-xs border btn-ghost">75%</button>
+        <button onclick="setRemovePct(100)" class="flex-1 py-1.5 rounded-lg text-xs border btn-ghost">100%</button>
+      </div>
+      <input type="range" id="remove-pct" min="1" max="100" value="50" oninput="updateRemoveInfo()" class="w-full" style="accent-color:var(--neon)" />
+      <div class="text-center text-2xl font-bold mt-2" style="color:var(--neon)"><span id="remove-pct-val">50</span>%</div>
+    </div>
+    <div class="p-3 rounded-xl text-sm space-y-2 mb-5" style="background:var(--bg-input)">
+      <div class="flex justify-between text-muted"><span data-i18n="you_receive">Você recebe</span><span id="remove-recv-a"></span></div>
+      <div class="flex justify-between text-muted"><span></span><span id="remove-recv-b"></span></div>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="closeRemove()" class="flex-1 py-3 rounded-xl border text-sm font-medium" style="border-color:var(--border-light)" data-i18n="cancel">Cancelar</button>
+      <button onclick="executeRemove()" id="remove-btn" class="flex-1 py-3 rounded-xl text-sm font-bold" style="background:var(--neon);color:#000" data-i18n="remove">Remover</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Wallet Select Modal -->
+<div id="wallet-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden" onclick="closeWalletModal()">
+  <div class="card border rounded-2xl w-full max-w-sm mx-4 p-5 shadow-2xl" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-semibold text-lg" data-i18n="select_wallet">Selecionar carteira</h3>
+      <button onclick="closeWalletModal()" class="text-muted text-xl leading-none">×</button>
+    </div>
+    <p class="text-xs text-muted mb-4" data-i18n="wallet_hint">Escolha uma carteira instalada no navegador ou no celular.</p>
+    <div id="wallet-list" class="space-y-2"></div>
+    <p class="text-[10px] text-muted mt-4 text-center" data-i18n="wallet_note">WalletConnect e mais opções em breve</p>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] hidden"></div>
+
+<footer class="border-t py-6 text-center text-xs text-muted" style="border-color:var(--border)">
+  NeonSwap © 2026 · <span id="footer-network">Ethereum</span> · <span data-i18n="prototype">Protótipo DeFi</span>
+</footer>
+
+<script>
+const I18N = {
+  pt: {
+    tab_swap:'Swap', tab_liquidity:'Liquidez', tab_pools:'Pools', tab_portfolio:'Portfólio',
+    connect_wallet:'Conectar Carteira', you_pay:'Você paga', you_receive:'Você recebe', balance:'Saldo',
+    rate:'Taxa', swap_fee:'Taxa de swap (0.3%)', price_impact:'Impacto no preço', min_received:'Mínimo recebido',
+    network:'Rede', enter_amount:'Insira um valor', recent_history:'Histórico recente', clear:'Limpar',
+    saved_locally:'Salvo automaticamente neste navegador', add_liquidity:'Adicionar Liquidez',
+    ratio:'Proporção', pool_share:'Participação no pool', est_fees:'Taxas estimadas (24h)',
+    il_estimate:'Impermanent Loss (est.)', enter_values:'Insira os valores', your_pools:'Seus pools',
+    no_pools:'Nenhum pool ativo ainda', allocation:'Alocação', select_token:'Selecionar token',
+    confirm_swap:'Confirmar Swap', cancel:'Cancelar', confirm:'Confirmar', remove_liquidity:'Remover Liquidez',
+    remove:'Remover', prototype:'Protótipo DeFi', connect_first:'Conecte a carteira', swap:'Trocar',
+    provide_liq:'Fornecer Liquidez', select_wallet:'Selecionar carteira',
+    wallet_hint:'Escolha uma carteira instalada no navegador ou no celular.',
+    wallet_note:'WalletConnect e mais opções em breve', not_installed:'Não detectada',
+    installed:'Detectada', open_install:'Instalar'
+  },
+  en: {
+    tab_swap:'Swap', tab_liquidity:'Liquidity', tab_pools:'Pools', tab_portfolio:'Portfolio',
+    connect_wallet:'Connect Wallet', you_pay:'You pay', you_receive:'You receive', balance:'Balance',
+    rate:'Rate', swap_fee:'Swap fee (0.3%)', price_impact:'Price impact', min_received:'Minimum received',
+    network:'Network', enter_amount:'Enter an amount', recent_history:'Recent history', clear:'Clear',
+    saved_locally:'Automatically saved in this browser', add_liquidity:'Add Liquidity',
+    ratio:'Ratio', pool_share:'Pool share', est_fees:'Est. fees (24h)',
+    il_estimate:'Impermanent Loss (est.)', enter_values:'Enter amounts', your_pools:'Your pools',
+    no_pools:'No active pools yet', allocation:'Allocation', select_token:'Select token',
+    confirm_swap:'Confirm Swap', cancel:'Cancel', confirm:'Confirm', remove_liquidity:'Remove Liquidity',
+    remove:'Remove', prototype:'DeFi Prototype', connect_first:'Connect wallet', swap:'Swap',
+    provide_liq:'Provide Liquidity', select_wallet:'Select wallet',
+    wallet_hint:'Choose a wallet installed in your browser or phone.',
+    wallet_note:'WalletConnect and more options coming soon', not_installed:'Not detected',
+    installed:'Detected', open_install:'Install'
+  }
+};
+
+const NETWORKS = {
+  ethereum: { name: 'Ethereum', chainId: '0x1', icon: '◈', rpc: 'https://eth.llamarpc.com' },
+  base:         { name: 'Base Mainnet', chainId: '0x2105', chainIdDecimal: 8453, icon: '⬡', rpc: 'https://mainnet.base.org', explorer: 'https://basescan.org', chainName: 'Base' },
+  'base-sepolia': { name: 'Base Sepolia · Teste', chainId: '0x14a34', chainIdDecimal: 84532, icon: '⬡', rpc: 'https://sepolia.base.org', explorer: 'https://sepolia.basescan.org', chainName: 'Base Sepolia' },
+  arbitrum: { name: 'Arbitrum', chainId: '0xa4b1', icon: '◆', rpc: 'https://arb1.arbitrum.io/rpc' },
+  bsc:      { name: 'BSC', chainId: '0x38', icon: '●', rpc: 'https://bsc-dataseed.binance.org' },
+  polygon:  { name: 'Polygon', chainId: '0x89', icon: '⬡', rpc: 'https://polygon-rpc.com' }
+};
+
+const CG_IDS = {
+  ETH:'ethereum', BTC:'bitcoin', SOL:'solana', BNB:'binancecoin', AVAX:'avalanche-2',
+  MATIC:'matic-network', USDT:'tether', USDC:'usd-coin', DAI:'dai'
+};
+
+
+// Base Sepolia Uniswap V3 + tokens
+const BASE_SEPOLIA_CONTRACTS = {
+  chainId: 84532,
+  chainIdHex: '0x14a34',
+  weth: '0x4200000000000000000000000000000000000006',
+  usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+  swapRouter02: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4',
+  quoterV2: '0xC5290058841028F1614F3A6F0F5816cAd0df5E27',
+  factory: '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24',
+  feeTiers: [500, 3000, 10000] // try best liquid pool
+};
+
+const ERC20_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function allowance(address owner, address spender) view returns (uint256)'
+];
+
+const SWAP_ROUTER_ABI = [
+  'function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)'
+];
+
+const QUOTER_ABI = [
+  'function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96) params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)'
+];
+
+let onChainUsdcBalance = null;
+
+const TOKENS = [
+  { symbol:'ETH', name:'Ethereum', price:3245.8, change24h:2.4, icon:'Ξ', balance:1.245, color:'#627EEA', cg:'ethereum' },
+  { symbol:'BTC', name:'Bitcoin', price:68420, change24h:-0.8, icon:'₿', balance:0.032, color:'#F7931A', cg:'bitcoin' },
+  { symbol:'SOL', name:'Solana', price:178.5, change24h:5.1, icon:'◎', balance:12.5, color:'#9945FF', cg:'solana' },
+  { symbol:'BNB', name:'BNB', price:612.4, change24h:1.2, icon:'B', balance:3.8, color:'#F3BA2F', cg:'binancecoin' },
+  { symbol:'AVAX', name:'Avalanche', price:38.9, change24h:-1.5, icon:'A', balance:25, color:'#E84142', cg:'avalanche-2' },
+  { symbol:'MATIC', name:'Polygon', price:0.72, change24h:3.8, icon:'M', balance:1500, color:'#8247E5', cg:'matic-network' },
+  { symbol:'USDT', name:'Tether', price:1, change24h:0.01, icon:'₮', balance:2450, color:'#26A17B', cg:'tether' },
+  { symbol:'USDC', name:'USD Coin', price:1, change24h:0, icon:'$', balance:890, color:'#2775CA', cg:'usd-coin' },
+  { symbol:'DAI', name:'Dai', price:1, change24h:0, icon:'D', balance:500, color:'#F5AC37', cg:'dai' },
+  { symbol:'TSLA', name:'Tesla', price:248.3, change24h:1.8, icon:'T', balance:4.2, color:'#CC0000', cg:null },
+  { symbol:'AAPL', name:'Apple', price:189.7, change24h:-0.4, icon:'A', balance:8, color:'#A2AAAD', cg:null },
+  { symbol:'NVDA', name:'NVIDIA', price:875.2, change24h:3.2, icon:'N', balance:1.1, color:'#76B900', cg:null },
+  { symbol:'AMZN', name:'Amazon', price:185.5, change24h:0.9, icon:'Z', balance:5.5, color:'#FF9900', cg:null },
+  { symbol:'GOOGL', name:'Alphabet', price:165.8, change24h:-0.2, icon:'G', balance:6, color:'#4285F4', cg:null },
+  { symbol:'META', name:'Meta', price:512.4, change24h:2.1, icon:'F', balance:2.3, color:'#0668E1', cg:null },
+];
+
+const POOLS = [
+  { a:'ETH', b:'USDT', tvl:12450000, apr:18.4, volume24h:2340000 },
+  { a:'BTC', b:'USDT', tvl:8900000, apr:12.1, volume24h:1890000 },
+  { a:'SOL', b:'USDC', tvl:3200000, apr:24.7, volume24h:980000 },
+  { a:'ETH', b:'USDC', tvl:5600000, apr:15.2, volume24h:1450000 },
+  { a:'BNB', b:'USDT', tvl:2100000, apr:14.8, volume24h:670000 },
+  { a:'AVAX', b:'USDC', tvl:980000, apr:21.3, volume24h:320000 },
+  { a:'TSLA', b:'USDT', tvl:890000, apr:9.8, volume24h:210000 },
+  { a:'NVDA', b:'USDC', tvl:1200000, apr:11.3, volume24h:340000 },
+  { a:'AAPL', b:'USDT', tvl:670000, apr:8.5, volume24h:150000 },
+  { a:'META', b:'USDC', tvl:540000, apr:10.1, volume24h:180000 },
+];
+
+let lang = localStorage.getItem('neonswap-lang') || 'pt';
+let currentNetwork = 'base-sepolia'; // Ambiente inicial seguro para testes
+let fromToken = TOKENS[0], toToken = TOKENS[6];
+let liqTokenA = TOKENS[0], liqTokenB = TOKENS[6];
+let modalTarget = null, slippage = 0.5;
+let history = [], myPools = [];
+let walletConnected = false, walletAddress = null;
+let onChainEthBalance = null;
+let walletOnBase = false;
+let chainReadInProgress = false;
+
+function getTokenBalance(symbol) {
+  if (symbol === 'ETH' && walletOnBase && onChainEthBalance !== null) {
+    return onChainEthBalance;
+  }
+  if (symbol === 'USDC' && walletOnBase && onChainUsdcBalance !== null) {
+    return onChainUsdcBalance;
+  }
+  return null;
+}
+
+function formatBal(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return Number(v).toLocaleString(undefined, { maximumFractionDigits: 6 });
+}
+
+let removePoolIdx = null, portfolioChart = null, priceChart = null, chartType = 'doughnut';
+
+// i18n
+function t(key) { return (I18N[lang] && I18N[lang][key]) || key; }
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n');
+    if (I18N[lang][k]) el.textContent = I18N[lang][k];
+  });
+  document.getElementById('lang-btn').textContent = lang.toUpperCase();
+  document.documentElement.lang = lang === 'pt' ? 'pt-BR' : 'en';
+  updateSwapButton(!!document.getElementById('from-amount').value);
+  updateLiqButton(!!document.getElementById('liq-a').value);
+  if (walletConnected) refreshOnChainWallet();
+}
+function toggleLang() {
+  lang = lang === 'pt' ? 'en' : 'pt';
+  localStorage.setItem('neonswap-lang', lang);
+  applyI18n();
+}
+
+// Theme
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('neonswap-theme', next);
+  if (portfolioChart) { updateChartTheme(); portfolioChart.update(); }
+  if (priceChart) renderPriceChart();
+}
+function initTheme() {
+  document.documentElement.setAttribute('data-theme', localStorage.getItem('neonswap-theme') || 'dark');
+}
+
+// Network
+function selectNetwork(key) {
+  if (!['base', 'base-sepolia'].includes(key)) {
+    showToast(lang === 'pt' ? 'Nesta etapa, a integração on-chain está disponível apenas na Base e Base Sepolia.' : 'On-chain integration is currently available only on Base and Base Sepolia.', 'error');
+    key = 'base-sepolia';
+  }
+  currentNetwork = key;
+  localStorage.setItem('neonswap-network', key);
+  const n = NETWORKS[key];
+  document.getElementById('network-icon').textContent = n.icon;
+  document.getElementById('network-label').textContent = n.name;
+  document.getElementById('swap-network').textContent = n.name;
+  document.getElementById('pools-network').textContent = n.name;
+  document.getElementById('footer-network').textContent = n.name;
+  const chainNameEl = document.getElementById('chain-network-name');
+  if (chainNameEl) chainNameEl.textContent = n.name;
+  closeDropdowns();
+  if (walletConnected && activeProvider) {
+    trySwitchChain(key);
+  } else {
+    refreshOnChainWallet();
+  }
+}
+
+async function trySwitchChain(networkKey) {
+  const provider = activeProvider;
+  const network = NETWORKS[networkKey];
+  if (!provider || !network) return false;
+  try {
+    await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: network.chainId }] });
+    return true;
+  } catch (e) {
+    if (e && e.code === 4902) {
+      try {
+        await provider.request({ method: 'wallet_addEthereumChain', params: [{
+          chainId: network.chainId,
+          chainName: network.chainName || network.name,
+          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+          rpcUrls: [network.rpc],
+          blockExplorerUrls: [network.explorer]
+        }] });
+        return true;
+      } catch (addError) {
+        showToast(lang === 'pt' ? 'Não foi possível adicionar esta rede à carteira.' : 'Could not add this network to the wallet.', 'error');
+      }
+    } else if (e && e.code !== 4001) {
+      showToast(lang === 'pt' ? 'Não foi possível mudar a rede da carteira.' : 'Could not switch wallet network.', 'error');
+    }
+    return false;
+  }
+}
+
+function toggleDropdown(id) {
+  const el = document.getElementById(id);
+  const open = el.classList.contains('open');
+  closeDropdowns();
+  if (!open) el.classList.add('open');
+}
+function closeDropdowns() {
+  document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open'));
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.dropdown')) closeDropdowns();
+});
+
+// Persistence
+function saveState() {
+  try {
+    localStorage.setItem('neonswap-history', JSON.stringify(history));
+    localStorage.setItem('neonswap-mypools', JSON.stringify(myPools));
+    // Saldos demonstrativos não são persistidos como se fossem saldos on-chain.
+  } catch(e) {}
+}
+function loadState() {
+  try {
+    const h = localStorage.getItem('neonswap-history'); if (h) history = JSON.parse(h);
+    const p = localStorage.getItem('neonswap-mypools'); if (p) myPools = JSON.parse(p);
+    // Não carregar saldos locais antigos: eles não representam a carteira na blockchain.
+  } catch(e) {}
+}
+function clearHistory() { history = []; saveState(); renderHistory(); showToast(t('clear'), 'success'); }
+
+// Tabs
+function setTab(tab) {
+  ['swap','liquidity','pools','portfolio'].forEach(tname => {
+    document.getElementById('panel-' + tname).classList.toggle('hidden', tname !== tab);
+    const d = document.getElementById('tab-' + tname), m = document.getElementById('mtab-' + tname);
+    const on = 'px-4 py-2 rounded-lg text-sm font-medium tab-active';
+    const off = 'px-4 py-2 rounded-lg text-sm font-medium text-muted';
+    const mon = 'px-4 py-2 rounded-lg text-sm font-medium tab-active whitespace-nowrap';
+    const moff = 'px-4 py-2 rounded-lg text-sm font-medium text-muted whitespace-nowrap';
+    if (d) d.className = tname === tab ? on : off;
+    if (m) m.className = tname === tab ? mon : moff;
+  });
+  if (tab === 'pools') renderPools();
+  if (tab === 'portfolio') { renderPortfolio(); setTimeout(renderPortfolioChart, 50); }
+  if (tab === 'swap') setTimeout(renderPriceChart, 50);
+}
+
+// Multi-wallet
+let activeProvider = null;
+let connectedWalletId = null;
+
+const WALLET_OPTIONS = [
+  {
+    id: 'metamask',
+    name: 'MetaMask',
+    icon: '🦊',
+    download: 'https://metamask.io/download/',
+    detect: () => {
+      const eth = window.ethereum;
+      if (!eth) return null;
+      // EIP-6963 / multi-provider
+      if (Array.isArray(eth.providers)) {
+        const p = eth.providers.find(x => x && x.isMetaMask && !x.isBraveWallet && !x.isRabby && !x.isTrust && !x.isTrustWallet && !x.isCoinbaseWallet);
+        if (p) return p;
+      }
+      if (eth.isMetaMask && !eth.isBraveWallet && !eth.isRabby && !eth.isTrust && !eth.isTrustWallet) return eth;
+      return null;
+    }
+  },
+  {
+    id: 'trust',
+    name: 'Trust Wallet',
+    icon: '🛡️',
+    download: 'https://trustwallet.com/browser-extension',
+    detect: () => {
+      if (window.trustwallet && typeof window.trustwallet.request === 'function') return window.trustwallet;
+      const eth = window.ethereum;
+      if (!eth) return null;
+      if (Array.isArray(eth.providers)) {
+        const p = eth.providers.find(x => x && (x.isTrust || x.isTrustWallet));
+        if (p) return p;
+      }
+      if (eth.isTrust || eth.isTrustWallet) return eth;
+      return null;
+    }
+  },
+  {
+    id: 'coinbase',
+    name: 'Coinbase Wallet',
+    icon: '🔵',
+    download: 'https://www.coinbase.com/wallet/downloads',
+    detect: () => {
+      if (window.coinbaseWalletExtension) return window.coinbaseWalletExtension;
+      const eth = window.ethereum;
+      if (!eth) return null;
+      if (Array.isArray(eth.providers)) {
+        const p = eth.providers.find(x => x && x.isCoinbaseWallet);
+        if (p) return p;
+      }
+      if (eth.isCoinbaseWallet) return eth;
+      return null;
+    }
+  },
+  {
+    id: 'brave',
+    name: 'Brave Wallet',
+    icon: '🦁',
+    download: 'https://brave.com/wallet/',
+    detect: () => {
+      const eth = window.ethereum;
+      if (!eth) return null;
+      if (Array.isArray(eth.providers)) {
+        const p = eth.providers.find(x => x && x.isBraveWallet);
+        if (p) return p;
+      }
+      if (eth.isBraveWallet) return eth;
+      return null;
+    }
+  },
+  {
+    id: 'rabby',
+    name: 'Rabby',
+    icon: '🐰',
+    download: 'https://rabby.io/',
+    detect: () => {
+      const eth = window.ethereum;
+      if (!eth) return null;
+      if (Array.isArray(eth.providers)) {
+        const p = eth.providers.find(x => x && x.isRabby);
+        if (p) return p;
+      }
+      if (eth.isRabby) return eth;
+      return null;
+    }
+  },
+  {
+    id: 'injected',
+    name: 'Browser Wallet',
+    icon: '🌐',
+    download: null,
+    detect: () => {
+      const eth = window.ethereum;
+      if (!eth) return null;
+      if (Array.isArray(eth.providers) && eth.providers.length) return eth.providers[0];
+      return eth;
+    }
+  }
+];
+
+function getAllInjectedProviders() {
+  const list = [];
+  const eth = window.ethereum;
+  if (!eth) return list;
+  if (Array.isArray(eth.providers)) {
+    eth.providers.forEach(p => { if (p) list.push(p); });
+  } else {
+    list.push(eth);
+  }
+  if (window.trustwallet && !list.includes(window.trustwallet)) list.push(window.trustwallet);
+  return list;
+}
+
+function walletAction() {
+  if (walletConnected) disconnectWallet();
+  else openWalletModal();
+}
+
+function openWalletModal() {
+  const list = document.getElementById('wallet-list');
+  list.innerHTML = '';
+
+  const anyInjected = getAllInjectedProviders().length > 0;
+
+  WALLET_OPTIONS.forEach(w => {
+    let provider = null;
+    try { provider = w.detect(); } catch (e) { provider = null; }
+    const detected = !!provider;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'w-full flex items-center gap-3 p-3 rounded-xl border transition-colors text-left';
+    btn.style.borderColor = 'var(--border)';
+    btn.style.background = 'var(--bg-input)';
+
+    // CRITICAL: only open install site when NOT detected
+    if (detected) {
+      btn.onmouseover = () => { btn.style.borderColor = 'var(--neon)'; };
+      btn.onmouseout = () => { btn.style.borderColor = 'var(--border)'; };
+      btn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        connectWithProvider(w, provider);
+      };
+    } else if (w.id === 'injected' && anyInjected) {
+      // generic browser wallet available
+      const fallback = getAllInjectedProviders()[0];
+      btn.onmouseover = () => { btn.style.borderColor = 'var(--neon)'; };
+      btn.onmouseout = () => { btn.style.borderColor = 'var(--border)'; };
+      btn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        connectWithProvider(w, fallback);
+      };
+    } else if (w.download) {
+      btn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        // only install link when truly not installed
+        window.open(w.download, '_blank', 'noopener,noreferrer');
+      };
+    } else {
+      btn.style.opacity = '0.5';
+      btn.disabled = true;
+    }
+
+    const statusDetected = detected || (w.id === 'injected' && anyInjected);
+    const actionLabel = statusDetected
+      ? (lang === 'pt' ? 'Conectar' : 'Connect')
+      : (w.download ? t('open_install') : '');
+
+    btn.innerHTML = `
+      <span class="text-2xl w-10 text-center">${w.icon}</span>
+      <div class="flex-1">
+        <div class="font-semibold text-sm">${w.name}</div>
+        <div class="text-[11px] text-muted">${statusDetected ? t('installed') : (w.download ? t('not_installed') : '—')}</div>
+      </div>
+      <span class="text-xs font-medium" style="color:${statusDetected ? 'var(--neon)' : 'var(--text-muted)'}">${actionLabel}</span>`;
+    list.appendChild(btn);
+  });
+
+  // WalletConnect placeholder
+  const wc = document.createElement('button');
+  wc.type = 'button';
+  wc.className = 'w-full flex items-center gap-3 p-3 rounded-xl border text-left opacity-60 cursor-not-allowed';
+  wc.style.borderColor = 'var(--border)';
+  wc.style.background = 'var(--bg-input)';
+  wc.disabled = true;
+  wc.innerHTML = `
+    <span class="text-2xl w-10 text-center">🔗</span>
+    <div class="flex-1">
+      <div class="font-semibold text-sm">WalletConnect</div>
+      <div class="text-[11px] text-muted">Trust mobile, Rainbow, Exodus...</div>
+    </div>
+    <span class="text-xs text-muted">${lang === 'pt' ? 'Em breve' : 'Soon'}</span>`;
+  list.appendChild(wc);
+
+  // Debug line for user (helps verify detection)
+  const dbg = document.createElement('p');
+  dbg.className = 'text-[10px] text-muted mt-2 text-center';
+  dbg.textContent = anyInjected
+    ? (lang === 'pt' ? 'Carteira(s) detectada(s) no navegador' : 'Wallet(s) detected in browser')
+    : (lang === 'pt' ? 'Nenhuma extensão detectada neste navegador' : 'No browser extension detected');
+  list.appendChild(dbg);
+
+  document.getElementById('wallet-modal').classList.remove('hidden');
+}
+
+function closeWalletModal() {
+  const m = document.getElementById('wallet-modal');
+  if (m) m.classList.add('hidden');
+}
+
+async function connectWithProvider(walletMeta, provider) {
+  const btn = document.getElementById('wallet-btn');
+  closeWalletModal();
+
+  if (!provider || typeof provider.request !== 'function') {
+    showToast(lang === 'pt' ? 'Provedor inválido. Tente outra carteira.' : 'Invalid provider. Try another wallet.', 'error');
+    return;
+  }
+
+  btn.innerHTML = '<span class="spin inline-block">⟳</span> ...';
+  try {
+    const accounts = await provider.request({ method: 'eth_requestAccounts' });
+    if (!accounts || !accounts.length) throw new Error('No accounts');
+
+    activeProvider = provider;
+    connectedWalletId = walletMeta.id;
+    walletAddress = accounts[0];
+    walletConnected = true;
+
+    const short = walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4);
+    btn.textContent = short + ' ▾';
+    btn.style.background = 'var(--bg-hover)';
+    btn.style.color = 'var(--neon)';
+    btn.style.border = '1px solid color-mix(in srgb, var(--neon) 40%, transparent)';
+    btn.classList.remove('glow-neon-sm');
+
+    const switched = await trySwitchChain(currentNetwork);
+    showToast((lang === 'pt' ? 'Carteira conectada: ' : 'Wallet connected: ') + walletMeta.name, 'success');
+
+    try {
+      if (provider.removeListener) {
+        provider.removeListener('accountsChanged', onAccountsChanged);
+        provider.removeListener('chainChanged', onWalletChainChanged);
+      }
+    } catch (e) {}
+    if (provider.on) {
+      provider.on('accountsChanged', onAccountsChanged);
+      provider.on('chainChanged', onWalletChainChanged);
+    }
+    await refreshOnChainWallet();
+    if (!switched) showToast(lang === 'pt' ? 'Selecione a rede Base na MetaMask para consultar o saldo.' : 'Select Base in MetaMask to read your balance.', 'error');
+  } catch (e) {
+    console.error('Wallet connect error:', e);
+    const msg = (e && e.code === 4001)
+      ? (lang === 'pt' ? 'Conexão rejeitada na carteira' : 'Connection rejected in wallet')
+      : (lang === 'pt' ? 'Falha ao conectar. Verifique se a extensão está desbloqueada.' : 'Failed to connect. Unlock the extension and try again.');
+    showToast(msg, 'error');
+    btn.textContent = t('connect_wallet');
+    btn.style.background = 'var(--neon)';
+    btn.style.color = '#000';
+    btn.style.border = 'none';
+    btn.classList.add('glow-neon-sm');
+  }
+  updateSwapButton(!!document.getElementById('from-amount').value);
+  updateLiqButton(!!document.getElementById('liq-a').value);
+}
+
+function onAccountsChanged(accs) {
+  const btn = document.getElementById('wallet-btn');
+  if (!accs || !accs.length) {
+    disconnectWallet();
+  } else {
+    walletAddress = accs[0];
+    btn.textContent = accs[0].slice(0, 6) + '...' + accs[0].slice(-4) + ' ▾';
+    refreshOnChainWallet();
+  }
+}
+
+function onWalletChainChanged(chainId) {
+  walletOnBase = String(chainId).toLowerCase() === NETWORKS[currentNetwork].chainId;
+  refreshOnChainWallet();
+  if (!walletOnBase) showToast(lang === 'pt' ? 'Rede incorreta. Selecione ' + NETWORKS[currentNetwork].name + ' para consultar os dados.' : 'Wrong network. Select ' + NETWORKS[currentNetwork].name + ' to read on-chain data.', 'error');
+}
+
+function setChainStatus(message, isOk=false) {
+  const el = document.getElementById('chain-status');
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = isOk ? 'var(--neon)' : 'var(--text-muted)';
+}
+
+function formatUnits18(hexValue) {
+  const wei = BigInt(hexValue || '0x0');
+  const whole = wei / 1000000000000000000n;
+  const fraction = (wei % 1000000000000000000n).toString().padStart(18, '0').slice(0, 6);
+  return whole.toString() + '.' + fraction;
+}
+
+async function refreshOnChainWallet() {
+  const addressEl = document.getElementById('chain-address');
+  const balanceEl = document.getElementById('chain-eth-balance');
+  const linkEl = document.getElementById('chain-explorer-link');
+  const updateEl = document.getElementById('chain-last-update');
+  if (!walletConnected || !activeProvider || !walletAddress) {
+    onChainEthBalance = null; onChainUsdcBalance = null; walletOnBase = false;
+    if (addressEl) addressEl.textContent = '—';
+    if (balanceEl) balanceEl.textContent = '—';
+    if (linkEl) linkEl.href = 'https://basescan.org';
+    setChainStatus(lang === 'pt' ? 'Aguardando conexão' : 'Waiting for wallet');
+    if (updateEl) updateEl.textContent = lang === 'pt' ? 'Conecte a carteira para consultar a blockchain.' : 'Connect your wallet to read the blockchain.';
+    renderPortfolio();
+    renderTokenButtons(); renderLiqButtons();
+    return;
+  }
+  if (chainReadInProgress) return;
+  chainReadInProgress = true;
+  if (addressEl) addressEl.textContent = walletAddress;
+  if (linkEl) linkEl.href = NETWORKS[currentNetwork].explorer + '/address/' + walletAddress;
+  try {
+    const chainId = await activeProvider.request({ method: 'eth_chainId' });
+    walletOnBase = String(chainId).toLowerCase() === NETWORKS[currentNetwork].chainId;
+    if (!walletOnBase) {
+      onChainEthBalance = null;
+      if (balanceEl) balanceEl.textContent = '—';
+      setChainStatus(lang === 'pt' ? 'Rede diferente da selecionada' : 'Wrong selected network');
+      if (updateEl) updateEl.textContent = lang === 'pt' ? 'Mude a carteira para ' + NETWORKS[currentNetwork].name + ' (Chain ID ' + NETWORKS[currentNetwork].chainIdDecimal + ').' : 'Switch your wallet to ' + NETWORKS[currentNetwork].name + ' (Chain ID ' + NETWORKS[currentNetwork].chainIdDecimal + ').';
+    } else {
+      const balanceHex = await activeProvider.request({ method: 'eth_getBalance', params: [walletAddress, 'latest'] });
+      onChainEthBalance = Number(formatUnits18(balanceHex));
+      if (balanceEl) balanceEl.textContent = onChainEthBalance.toLocaleString(lang === 'pt' ? 'pt-BR' : 'en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+      // USDC on Base Sepolia
+      onChainUsdcBalance = null;
+      try {
+        if (String(chainId).toLowerCase() === BASE_SEPOLIA_CONTRACTS.chainIdHex) {
+          const provider = new ethers.BrowserProvider(activeProvider);
+          const usdc = new ethers.Contract(BASE_SEPOLIA_CONTRACTS.usdc, ERC20_ABI, provider);
+          const raw = await usdc.balanceOf(walletAddress);
+          onChainUsdcBalance = Number(ethers.formatUnits(raw, 6));
+        }
+      } catch (e) { console.warn('USDC balance read failed', e); }
+      setChainStatus(lang === 'pt' ? 'Conectado à ' + NETWORKS[currentNetwork].name : 'Connected to ' + NETWORKS[currentNetwork].name, true);
+      if (updateEl) updateEl.textContent = (lang === 'pt' ? 'Saldo lido diretamente da ' + NETWORKS[currentNetwork].name + ' · Atualizado em ' : 'Balance read directly from ' + NETWORKS[currentNetwork].name + ' · Updated ') + new Date().toLocaleTimeString();
+    }
+  } catch (e) {
+    console.error('Base read error:', e);
+    onChainEthBalance = null;
+    setChainStatus(lang === 'pt' ? 'Falha na leitura on-chain' : 'On-chain read failed');
+    if (updateEl) updateEl.textContent = lang === 'pt' ? 'Não foi possível consultar ' + NETWORKS[currentNetwork].name + '. Tente novamente.' : 'Could not read ' + NETWORKS[currentNetwork].name + '. Please retry.';
+  } finally {
+    chainReadInProgress = false;
+    renderPortfolio(); renderTokenButtons(); renderLiqButtons();
+    const port = document.getElementById('panel-portfolio');
+    if (port && !port.classList.contains('hidden')) setTimeout(renderPortfolioChart, 80);
+  }
+}
+
+function disconnectWallet() {
+  walletConnected = false;
+  walletAddress = null;
+  onChainEthBalance = null;
+  walletOnBase = false;
+  activeProvider = null;
+  connectedWalletId = null;
+  const btn = document.getElementById('wallet-btn');
+  btn.textContent = t('connect_wallet');
+  btn.style.background = 'var(--neon)';
+  btn.style.color = '#000';
+  btn.style.border = 'none';
+  btn.classList.add('glow-neon-sm');
+  setChainStatus(lang === 'pt' ? 'Desconectado' : 'Disconnected');
+  refreshOnChainWallet();
+  updateSwapButton(!!document.getElementById('from-amount').value);
+  updateLiqButton(!!document.getElementById('liq-a').value);
+}
+
+// backward-compatible alias used elsewhere
+async function connectWallet() {
+  openWalletModal();
+}
+
+// Prices from CoinGecko
+async function fetchPrices() {
+  const ids = [...new Set(TOKENS.filter(t => t.cg).map(t => t.cg))].join(',');
+  try {
+    const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`);
+    if (!res.ok) throw new Error('api');
+    const data = await res.json();
+    TOKENS.forEach(t => {
+      if (t.cg && data[t.cg]) {
+        t.price = data[t.cg].usd;
+        t.change24h = +(data[t.cg].usd_24h_change || 0).toFixed(2);
+      }
+    });
+    renderTokenButtons();
+    renderLiqButtons();
+    if (document.getElementById('from-amount').value) updateFromAmount();
+    renderPriceChart();
+  } catch (e) {
+    console.warn('Price fetch failed, using defaults');
+  }
+}
+
+// Swap logic
+function getRate() { return fromToken.price / toToken.price; }
+function updateFromAmount() {
+  const val = parseFloat(document.getElementById('from-amount').value);
+  if (!val || isNaN(val)) { clearSwapInfo(); return; }
+  const rate = getRate(), toVal = val * rate;
+  const fee = val * fromToken.price * 0.003;
+  const minRecv = toVal * (1 - slippage / 100);
+  document.getElementById('to-amount').value = toVal.toFixed(6);
+  document.getElementById('from-usd').textContent = (val * fromToken.price).toLocaleString(undefined,{maximumFractionDigits:2});
+  document.getElementById('to-usd').textContent = (toVal * toToken.price).toLocaleString(undefined,{maximumFractionDigits:2});
+  document.getElementById('rate-text').textContent = `1 ${fromToken.symbol} = ${rate.toFixed(6)} ${toToken.symbol}`;
+  document.getElementById('fee-text').textContent = `$${fee.toFixed(2)}`;
+  document.getElementById('min-received').textContent = `${minRecv.toFixed(6)} ${toToken.symbol}`;
+  document.getElementById('rate-info').classList.remove('hidden');
+  updateSwapButton(true);
+}
+function updateToAmount() {
+  const val = parseFloat(document.getElementById('to-amount').value);
+  if (!val || isNaN(val)) { clearSwapInfo(); return; }
+  document.getElementById('from-amount').value = (val / getRate()).toFixed(6);
+  updateFromAmount();
+}
+function clearSwapInfo() {
+  document.getElementById('to-amount').value = '';
+  document.getElementById('from-usd').textContent = '0.00';
+  document.getElementById('to-usd').textContent = '0.00';
+  document.getElementById('rate-info').classList.add('hidden');
+  updateSwapButton(false);
+}
+function updateSwapButton(enabled) {
+  const btn = document.getElementById('swap-btn');
+  if (enabled && walletConnected) {
+    btn.disabled = false;
+    btn.textContent = (currentNetwork === 'base-sepolia' && isOnChainSwapPair())
+      ? (lang === 'pt' ? 'Swap on-chain (Base Sepolia)' : 'On-chain swap (Base Sepolia)')
+      : (lang === 'pt' ? 'Revisar swap' : 'Review swap');
+    btn.style.background = 'var(--neon)';
+    btn.style.color = '#000';
+    btn.className = 'w-full mt-5 font-bold py-4 rounded-2xl text-lg glow-neon cursor-pointer';
+  } else if (enabled && !walletConnected) {
+    btn.disabled = false;
+    btn.textContent = t('connect_first');
+    btn.style.background = 'var(--neon)';
+    btn.style.color = '#000';
+    btn.className = 'w-full mt-5 font-bold py-4 rounded-2xl text-lg glow-neon cursor-pointer';
+  } else {
+    btn.disabled = true;
+    btn.textContent = t('enter_amount');
+    btn.style.background = 'var(--bg-hover)';
+    btn.style.color = 'var(--text-muted)';
+    btn.className = 'w-full mt-5 font-bold py-4 rounded-2xl text-lg opacity-50 cursor-not-allowed';
+  }
+}
+function setMax(side) {
+  if (side === 'from') {
+    const bal = getTokenBalance(fromToken.symbol);
+    if (bal === null) {
+      showToast(lang === 'pt' ? 'Saldo on-chain indisponível para este token.' : 'On-chain balance unavailable for this token.', 'error');
+      return;
+    }
+    document.getElementById('from-amount').value = bal;
+    updateFromAmount();
+  }
+}
+function switchTokens() {
+  [fromToken, toToken] = [toToken, fromToken];
+  const a = document.getElementById('from-amount').value, b = document.getElementById('to-amount').value;
+  document.getElementById('from-amount').value = b; document.getElementById('to-amount').value = a;
+  renderTokenButtons(); if (a || b) updateFromAmount(); renderPriceChart();
+}
+function renderTokenButtons() {
+  document.getElementById('from-icon').textContent = fromToken.icon;
+  document.getElementById('from-symbol').textContent = fromToken.symbol;
+  document.getElementById('from-balance').textContent = formatBal(getTokenBalance(fromToken.symbol));
+  document.getElementById('to-icon').textContent = toToken.icon;
+  document.getElementById('to-symbol').textContent = toToken.symbol;
+  document.getElementById('to-balance').textContent = formatBal(getTokenBalance(toToken.symbol));
+  document.getElementById('chart-pair-label').textContent = `${fromToken.symbol} / ${toToken.symbol}`;
+  const ch = fromToken.change24h;
+  const el = document.getElementById('chart-price-change');
+  el.textContent = (ch >= 0 ? '+' : '') + ch + '%';
+  el.style.color = ch >= 0 ? 'var(--neon)' : '#ef4444';
+}
+function isOnChainSwapPair() {
+  const a = fromToken.symbol, b = toToken.symbol;
+  return (a === 'ETH' && b === 'USDC') || (a === 'USDC' && b === 'ETH');
+}
+
+function openConfirmSwap() {
+  if (!walletConnected) { connectWallet(); return; }
+  if (!walletOnBase || currentNetwork !== 'base-sepolia') {
+    showToast(lang === 'pt' ? 'Selecione e conecte a Base Sepolia para swap on-chain.' : 'Select and connect Base Sepolia for on-chain swap.', 'error');
+    return;
+  }
+  if (!isOnChainSwapPair()) {
+    showToast(lang === 'pt' ? 'On-chain na Base Sepolia: use o par ETH ↔ USDC.' : 'On-chain on Base Sepolia: use the ETH ↔ USDC pair.', 'error');
+    return;
+  }
+  const fromAmt = document.getElementById('from-amount').value;
+  const toAmt = document.getElementById('to-amount').value;
+  if (!fromAmt || parseFloat(fromAmt) <= 0) {
+    showToast(lang === 'pt' ? 'Informe um valor.' : 'Enter an amount.', 'error');
+    return;
+  }
+  const fee = parseFloat(fromAmt) * fromToken.price * 0.003;
+  document.getElementById('confirm-from').textContent = `${fromAmt} ${fromToken.symbol}`;
+  document.getElementById('confirm-to').textContent = `~${toAmt} ${toToken.symbol}`;
+  document.getElementById('confirm-fee').textContent = `Uniswap 0.3% · slippage ${slippage}%`;
+  document.getElementById('confirm-slippage').textContent = `${slippage}%`;
+  document.getElementById('confirm-network').textContent = NETWORKS[currentNetwork].name + ' · on-chain';
+  document.getElementById('confirm-modal').classList.remove('hidden');
+}
+function closeConfirm() { document.getElementById('confirm-modal').classList.add('hidden'); }
+async function quoteExactInputSingle(provider, tokenIn, tokenOut, amountIn, fee) {
+  // QuoterV2.quoteExactInputSingle is not view — use staticCall
+  const quoter = new ethers.Contract(BASE_SEPOLIA_CONTRACTS.quoterV2, [
+    'function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96) params) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)'
+  ], provider);
+  const params = {
+    tokenIn,
+    tokenOut,
+    amountIn,
+    fee,
+    sqrtPriceLimitX96: 0n
+  };
+  const result = await quoter.quoteExactInputSingle.staticCall(params);
+  return { amountOut: result[0], fee };
+}
+
+async function findBestQuote(provider, tokenIn, tokenOut, amountIn) {
+  let best = null;
+  for (const fee of BASE_SEPOLIA_CONTRACTS.feeTiers) {
+    try {
+      const q = await quoteExactInputSingle(provider, tokenIn, tokenOut, amountIn, fee);
+      if (!best || q.amountOut > best.amountOut) best = q;
+    } catch (e) {
+      console.warn('No quote for fee', fee, e?.shortMessage || e?.message || e);
+    }
+  }
+  return best;
+}
+
+async function executeSwap() {
+  const btn = document.getElementById('confirm-btn');
+  btn.innerHTML = '<span class="spin inline-block">⟳</span>';
+  btn.disabled = true;
+  try {
+    if (!isOnChainSwapPair() || currentNetwork !== 'base-sepolia') {
+      throw new Error(lang === 'pt' ? 'Par não suportado on-chain.' : 'Pair not supported on-chain.');
+    }
+    const fromAmt = parseFloat(document.getElementById('from-amount').value);
+    if (!fromAmt || fromAmt <= 0) throw new Error('Invalid amount');
+
+    const provider = new ethers.BrowserProvider(activeProvider);
+    const signer = await provider.getSigner();
+    const router = new ethers.Contract(BASE_SEPOLIA_CONTRACTS.swapRouter02, SWAP_ROUTER_ABI, signer);
+
+    const isEthIn = fromToken.symbol === 'ETH';
+    const tokenIn = isEthIn ? BASE_SEPOLIA_CONTRACTS.weth : BASE_SEPOLIA_CONTRACTS.usdc;
+    const tokenOut = isEthIn ? BASE_SEPOLIA_CONTRACTS.usdc : BASE_SEPOLIA_CONTRACTS.weth;
+    const decimalsIn = isEthIn ? 18 : 6;
+    const decimalsOut = isEthIn ? 6 : 18;
+    const amountIn = ethers.parseUnits(String(fromAmt), decimalsIn);
+
+    showToast(lang === 'pt' ? 'Consultando cotação Uniswap…' : 'Fetching Uniswap quote…', 'success');
+    const best = await findBestQuote(provider, tokenIn, tokenOut, amountIn);
+    if (!best || best.amountOut <= 0n) {
+      throw new Error(lang === 'pt'
+        ? 'Sem liquidez no pool ETH/USDC nesta rede de teste.'
+        : 'No liquidity in ETH/USDC pool on this testnet.');
+    }
+
+    // minOut from REAL quote, not CoinGecko UI estimate
+    const slipBps = BigInt(Math.floor(slippage * 100)); // 0.5% -> 50 bps
+    const amountOutMinimum = best.amountOut * (10000n - slipBps) / 10000n;
+    const quotedOut = Number(ethers.formatUnits(best.amountOut, decimalsOut));
+
+    // refresh confirm UI
+    document.getElementById('confirm-to').textContent = `~${quotedOut.toFixed(decimalsOut === 6 ? 4 : 6)} ${toToken.symbol}`;
+    document.getElementById('to-amount').value = quotedOut.toFixed(6);
+
+    if (!isEthIn) {
+      const usdc = new ethers.Contract(BASE_SEPOLIA_CONTRACTS.usdc, ERC20_ABI, signer);
+      const allowance = await usdc.allowance(walletAddress, BASE_SEPOLIA_CONTRACTS.swapRouter02);
+      if (allowance < amountIn) {
+        showToast(lang === 'pt' ? 'Aprove USDC na MetaMask…' : 'Approve USDC in MetaMask…', 'success');
+        const txA = await usdc.approve(BASE_SEPOLIA_CONTRACTS.swapRouter02, ethers.MaxUint256);
+        await txA.wait();
+      }
+    }
+
+    const params = {
+      tokenIn,
+      tokenOut,
+      fee: best.fee,
+      recipient: walletAddress,
+      amountIn,
+      amountOutMinimum,
+      sqrtPriceLimitX96: 0n
+    };
+
+    showToast(lang === 'pt'
+      ? `Confirme o swap (fee ${best.fee/10000}%) na MetaMask…`
+      : `Confirm swap (fee ${best.fee/10000}%) in MetaMask…`, 'success');
+    const tx = await router.exactInputSingle(params, isEthIn ? { value: amountIn } : {});
+    showToast(lang === 'pt' ? 'Aguardando confirmação…' : 'Waiting for confirmation…', 'success');
+    const receipt = await tx.wait();
+
+    history.unshift({
+      from: fromToken.symbol, to: toToken.symbol, fromAmt,
+      toAmt: quotedOut, time: new Date().toLocaleTimeString(lang==='pt'?'pt-BR':'en', {hour:'2-digit',minute:'2-digit'}),
+      network: 'Base Sepolia', tx: receipt.hash
+    });
+    if (history.length > 8) history.pop();
+    saveState(); renderHistory(); closeConfirm();
+    document.getElementById('from-amount').value = ''; clearSwapInfo();
+    await refreshOnChainWallet();
+    showToast(lang === 'pt' ? `Swap confirmado! Tx: ${receipt.hash.slice(0,10)}…` : `Swap confirmed! Tx: ${receipt.hash.slice(0,10)}…`, 'success');
+  } catch (e) {
+    console.error(e);
+    const msg = (e && e.shortMessage) || (e && e.reason) || (e && e.message) || String(e);
+    showToast((lang === 'pt' ? 'Falha no swap: ' : 'Swap failed: ') + String(msg).slice(0, 140), 'error');
+  } finally {
+    btn.innerHTML = t('confirm');
+    btn.disabled = false;
+  }
+}
+
+function renderHistory() {
+  const box = document.getElementById('history-box'), list = document.getElementById('history-list');
+  if (!history.length) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  list.innerHTML = history.map(h => `
+    <div class="flex justify-between items-center py-2 border-b last:border-0" style="border-color:var(--border)">
+      <span>${h.fromAmt} ${h.from} → ${h.toAmt.toFixed(4)} ${h.to}</span>
+      <span class="text-xs text-muted">${h.time}${h.network ? ' · '+h.network : ''}</span>
+    </div>`).join('');
+}
+function toggleSlippage() {
+  slippage = slippage === 0.5 ? 1 : slippage === 1 ? 0.1 : 0.5;
+  document.getElementById('slippage-value').textContent = slippage;
+  if (document.getElementById('from-amount').value) updateFromAmount();
+}
+
+// Price chart (synthetic from current price)
+function renderPriceChart() {
+  const ctx = document.getElementById('price-chart');
+  if (!ctx) return;
+  if (priceChart) priceChart.destroy();
+  const base = fromToken.price;
+  const points = 24;
+  const data = [];
+  let v = base * (1 - (fromToken.change24h || 0) / 100);
+  for (let i = 0; i < points; i++) {
+    v *= 1 + (Math.random() - 0.48) * 0.01;
+    data.push(+v.toFixed(2));
+  }
+  data[data.length - 1] = base;
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const up = (fromToken.change24h || 0) >= 0;
+  priceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array(points).fill(''),
+      datasets: [{
+        data,
+        borderColor: up ? '#00ff41' : '#ef4444',
+        backgroundColor: up ? 'rgba(0,255,65,0.08)' : 'rgba(239,68,68,0.08)',
+        fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: true } },
+      scales: { x: { display: false }, y: { display: false } }
+    }
+  });
+}
+
+// Liquidity + IL
+function calcIL(priceRatio) {
+  // Classic IL formula for 50/50 pool: IL = 2*sqrt(r)/(1+r) - 1
+  const r = priceRatio;
+  if (r <= 0) return 0;
+  return (2 * Math.sqrt(r) / (1 + r) - 1) * 100;
+}
+function updateLiqA() {
+  const val = parseFloat(document.getElementById('liq-a').value);
+  if (!val || isNaN(val)) { document.getElementById('liq-b').value = ''; document.getElementById('liq-info').classList.add('hidden'); updateLiqButton(false); return; }
+  const bVal = val * (liqTokenA.price / liqTokenB.price);
+  document.getElementById('liq-b').value = bVal.toFixed(6);
+  updateLiqInfo(val, bVal);
+}
+function updateLiqB() {
+  const val = parseFloat(document.getElementById('liq-b').value);
+  if (!val || isNaN(val)) { document.getElementById('liq-a').value = ''; document.getElementById('liq-info').classList.add('hidden'); updateLiqButton(false); return; }
+  const aVal = val / (liqTokenA.price / liqTokenB.price);
+  document.getElementById('liq-a').value = aVal.toFixed(6);
+  updateLiqInfo(aVal, val);
+}
+function updateLiqInfo(aVal, bVal) {
+  const usd = aVal * liqTokenA.price + bVal * liqTokenB.price;
+  document.getElementById('liq-ratio').textContent = `1 ${liqTokenA.symbol} = ${(liqTokenA.price / liqTokenB.price).toFixed(4)} ${liqTokenB.symbol}`;
+  document.getElementById('liq-share').textContent = `~${(usd / 5e6 * 100).toFixed(3)}%`;
+  document.getElementById('liq-fees').textContent = `+$${(usd * 0.0008).toFixed(2)}`;
+  // Simulated IL assuming ±10% move on token A
+  const il = Math.abs(calcIL(1.1));
+  document.getElementById('liq-il').textContent = `~${il.toFixed(2)}% (${lang==='pt'?'se preço ±10%':'if price ±10%'})`;
+  document.getElementById('liq-info').classList.remove('hidden');
+  updateLiqButton(true);
+}
+function updateLiqButton(enabled) {
+  const btn = document.getElementById('liq-btn');
+  if (enabled && walletConnected) {
+    btn.disabled = false;
+    btn.textContent = lang === 'pt' ? 'Criar pool de teste' : 'Create test pool';
+    btn.style.background = 'var(--neon)';
+    btn.style.color = '#000';
+    btn.className = 'w-full font-bold py-4 rounded-2xl text-lg glow-neon cursor-pointer';
+  } else if (enabled && !walletConnected) {
+    btn.disabled = false;
+    btn.textContent = t('connect_first');
+    btn.style.background = 'var(--neon)';
+    btn.style.color = '#000';
+    btn.className = 'w-full font-bold py-4 rounded-2xl text-lg glow-neon cursor-pointer';
+  } else {
+    btn.disabled = true;
+    btn.textContent = t('enter_values');
+    btn.style.background = 'var(--bg-hover)';
+    btn.style.color = 'var(--text-muted)';
+    btn.className = 'w-full font-bold py-4 rounded-2xl text-lg opacity-50 cursor-not-allowed';
+  }
+}
+function setMaxLiq(side) {
+  if (side === 'a') {
+    const bal = getTokenBalance(liqTokenA.symbol);
+    if (bal === null) { showToast(lang === 'pt' ? 'Saldo on-chain indisponível.' : 'On-chain balance unavailable.', 'error'); return; }
+    document.getElementById('liq-a').value = bal; updateLiqA();
+  } else {
+    const bal = getTokenBalance(liqTokenB.symbol);
+    if (bal === null) { showToast(lang === 'pt' ? 'Saldo on-chain indisponível (token ainda sem contrato configurado).' : 'On-chain balance unavailable (token contract not configured).', 'error'); return; }
+    document.getElementById('liq-b').value = bal; updateLiqB();
+  }
+}
+function addLiquidity() {
+  if (!walletConnected) { connectWallet(); return; }
+  const aAmt = parseFloat(document.getElementById('liq-a').value);
+  const bAmt = parseFloat(document.getElementById('liq-b').value);
+  if (!aAmt || !bAmt || isNaN(aAmt) || isNaN(bAmt)) {
+    showToast(lang === 'pt' ? 'Informe os valores dos dois tokens.' : 'Enter both token amounts.', 'error');
+    return;
+  }
+  // Validate ETH side against faucet/on-chain balance
+  for (const [sym, amt] of [[liqTokenA.symbol, aAmt], [liqTokenB.symbol, bAmt]]) {
+    const bal = getTokenBalance(sym);
+    if (sym === 'ETH') {
+      if (bal === null) {
+        showToast(lang === 'pt' ? 'Conecte à Base Sepolia para usar ETH da faucet.' : 'Connect to Base Sepolia to use faucet ETH.', 'error');
+        return;
+      }
+      if (amt > bal + 1e-12) {
+        showToast(lang === 'pt' ? `Saldo ETH insuficiente (${bal.toFixed(6)}).` : `Insufficient ETH balance (${bal.toFixed(6)}).`, 'error');
+        return;
+      }
+    } else if (bal === null) {
+      // Allow test pools with simulated second token (no on-chain ERC20 yet)
+      // continue
+    } else if (amt > bal + 1e-12) {
+      showToast(lang === 'pt' ? `Saldo insuficiente de ${sym}.` : `Insufficient ${sym} balance.`, 'error');
+      return;
+    }
+  }
+  const btn = document.getElementById('liq-btn');
+  btn.innerHTML = '<span class="spin inline-block">⟳</span>'; btn.disabled = true;
+  setTimeout(() => {
+    const key = `${liqTokenA.symbol}/${liqTokenB.symbol}`;
+    const ex = myPools.find(p => p.key === key);
+    if (ex) { ex.aAmt += aAmt; ex.bAmt += bAmt; }
+    else myPools.push({
+      key, a: liqTokenA.symbol, b: liqTokenB.symbol,
+      aIcon: liqTokenA.icon, bIcon: liqTokenB.icon,
+      aAmt, bAmt, apr: 18.4,
+      network: NETWORKS[currentNetwork].name,
+      mode: 'test-local'
+    });
+    document.getElementById('liq-a').value = ''; document.getElementById('liq-b').value = '';
+    document.getElementById('liq-info').classList.add('hidden'); updateLiqButton(false);
+    saveState(); renderMyPools(); renderTokenButtons(); renderLiqButtons(); renderPortfolio();
+    if (document.getElementById('panel-portfolio') && !document.getElementById('panel-portfolio').classList.contains('hidden')) {
+      setTimeout(renderPortfolioChart, 80);
+    }
+    btn.innerHTML = lang === 'pt' ? 'Criar pool de teste' : 'Create test pool';
+    showToast(lang === 'pt'
+      ? `Pool de teste criado: ${aAmt} ${liqTokenA.symbol} + ${bAmt.toFixed(4)} ${liqTokenB.symbol} (local · não envia tx)`
+      : `Test pool created: ${aAmt} ${liqTokenA.symbol} + ${bAmt.toFixed(4)} ${liqTokenB.symbol} (local · no tx)`,
+      'success');
+  }, 900);
+}
+function renderMyPools() {
+  const el = document.getElementById('my-pools');
+  if (!myPools.length) { el.innerHTML = `<div class="text-center text-muted text-sm py-6">${t('no_pools')}</div>`; return; }
+  el.innerHTML = myPools.map((p, idx) => `
+    <div class="flex items-center gap-3 p-3 rounded-xl border" style="background:var(--bg-input);border-color:var(--border)">
+      <div class="flex -space-x-2">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">${p.aIcon}</div>
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">${p.bIcon}</div>
+      </div>
+      <div class="flex-1"><div class="font-medium text-sm">${p.a}/${p.b}</div>
+        <div class="text-xs text-muted">${p.aAmt.toFixed(4)} ${p.a} + ${p.bAmt.toFixed(2)} ${p.b}</div></div>
+      <div class="text-sm mr-2" style="color:var(--neon)">${p.apr}% APR</div>
+      <button onclick="openRemove(${idx})" class="px-3 py-1.5 rounded-lg text-xs font-medium border" style="border-color:#ef4444;color:#ef4444">${t('remove')}</button>
+    </div>`).join('');
+}
+function renderLiqButtons() {
+  document.getElementById('liq-a-icon').textContent = liqTokenA.icon;
+  document.getElementById('liq-a-symbol').textContent = liqTokenA.symbol;
+  document.getElementById('liq-a-balance').textContent = formatBal(getTokenBalance(liqTokenA.symbol));
+  document.getElementById('liq-b-icon').textContent = liqTokenB.icon;
+  document.getElementById('liq-b-symbol').textContent = liqTokenB.symbol;
+  document.getElementById('liq-b-balance').textContent = formatBal(getTokenBalance(liqTokenB.symbol));
+}
+
+// Remove LP
+function openRemove(idx) {
+  removePoolIdx = idx;
+  const p = myPools[idx];
+  document.getElementById('remove-pool-name').textContent = `Pool ${p.a}/${p.b}`;
+  document.getElementById('remove-pct').value = 50;
+  updateRemoveInfo();
+  document.getElementById('remove-modal').classList.remove('hidden');
+}
+function closeRemove() { document.getElementById('remove-modal').classList.add('hidden'); removePoolIdx = null; }
+function setRemovePct(pct) { document.getElementById('remove-pct').value = pct; updateRemoveInfo(); }
+function updateRemoveInfo() {
+  const pct = parseInt(document.getElementById('remove-pct').value);
+  document.getElementById('remove-pct-val').textContent = pct;
+  if (removePoolIdx === null) return;
+  const p = myPools[removePoolIdx];
+  document.getElementById('remove-recv-a').textContent = `${(p.aAmt * pct / 100).toFixed(6)} ${p.a}`;
+  document.getElementById('remove-recv-b').textContent = `${(p.bAmt * pct / 100).toFixed(4)} ${p.b}`;
+}
+function executeRemove() {
+  showToast(lang === 'pt' ? 'Remoção on-chain ainda não está habilitada. Nenhuma transação foi enviada.' : 'On-chain removal is not enabled yet. No transaction was sent.', 'error');
+  return;
+  const btn = document.getElementById('remove-btn');
+  btn.innerHTML = '<span class="spin inline-block">⟳</span>'; btn.disabled = true;
+  setTimeout(() => {
+    const pct = parseInt(document.getElementById('remove-pct').value) / 100;
+    const p = myPools[removePoolIdx];
+    const recvA = p.aAmt * pct, recvB = p.bAmt * pct;
+    const tA = TOKENS.find(x => x.symbol === p.a), tB = TOKENS.find(x => x.symbol === p.b);
+    if (tA) tA.balance = +(tA.balance + recvA).toFixed(6);
+    if (tB) tB.balance = +(tB.balance + recvB).toFixed(6);
+    p.aAmt = +(p.aAmt * (1 - pct)).toFixed(6); p.bAmt = +(p.bAmt * (1 - pct)).toFixed(6);
+    if (p.aAmt < 1e-4 && p.bAmt < 1e-4) myPools.splice(removePoolIdx, 1);
+    saveState(); closeRemove(); btn.innerHTML = t('remove'); btn.disabled = false;
+    renderMyPools(); renderTokenButtons(); renderLiqButtons(); renderPortfolio();
+    showToast(`${recvA.toFixed(4)} ${p.a} + ${recvB.toFixed(2)} ${p.b}`, 'success');
+  }, 1500);
+}
+
+// Pools
+function renderPools() {
+  const el = document.getElementById('pools-list');
+  el.innerHTML = POOLS.map((p, idx) => {
+    const tokenA = TOKENS.find(t => t.symbol === p.a), tokenB = TOKENS.find(t => t.symbol === p.b);
+    const my = myPools.find(m => m.key === `${p.a}/${p.b}` || m.key === `${p.b}/${p.a}`);
+    const myShareUsd = my ? (my.aAmt * (tokenA?.price||0) + my.bAmt * (tokenB?.price||0)) : 0;
+    const fee24h = p.volume24h * 0.003;
+    return `
+    <div class="rounded-xl border overflow-hidden" style="background:var(--bg-input);border-color:var(--border)">
+      <div class="flex items-center gap-3 p-4 flex-wrap">
+        <div class="flex -space-x-2">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">${tokenA.icon}</div>
+          <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">${tokenB.icon}</div>
+        </div>
+        <div class="flex-1 min-w-[80px]"><div class="font-semibold">${p.a} / ${p.b}</div><div class="text-xs text-muted">Fee 0.3%</div></div>
+        <div class="text-right hidden sm:block"><div class="text-sm font-medium">$${(p.tvl/1e6).toFixed(2)}M</div><div class="text-xs text-muted">TVL</div></div>
+        <div class="text-right hidden sm:block"><div class="text-sm font-medium">$${(p.volume24h/1e6).toFixed(2)}M</div><div class="text-xs text-muted">Vol 24h</div></div>
+        <div class="text-right"><div class="font-semibold" style="color:var(--neon)">${p.apr}%</div><div class="text-xs text-muted">APR</div></div>
+        <button onclick="togglePoolDetail(${idx})" class="px-3 py-2 rounded-lg text-xs border btn-ghost" id="pool-toggle-${idx}">Detalhes</button>
+        <button onclick="setTab('liquidity');selectPool('${p.a}','${p.b}')" class="px-3 py-2 rounded-lg text-sm font-medium" style="background:color-mix(in srgb,var(--neon) 12%,transparent);border:1px solid color-mix(in srgb,var(--neon) 30%,transparent);color:var(--neon)">+ LP</button>
+      </div>
+      <div id="pool-detail-${idx}" class="hidden px-4 pb-4">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl text-sm" style="background:var(--bg-card);border:1px solid var(--border)">
+          <div><div class="text-xs text-muted">TVL</div><div class="font-medium">$${p.tvl.toLocaleString()}</div></div>
+          <div><div class="text-xs text-muted">Vol 24h</div><div class="font-medium">$${p.volume24h.toLocaleString()}</div></div>
+          <div><div class="text-xs text-muted">Fees 24h</div><div class="font-medium" style="color:var(--neon)">$${fee24h.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+          <div><div class="text-xs text-muted">APR</div><div class="font-medium" style="color:var(--neon)">${p.apr}%</div></div>
+          <div><div class="text-xs text-muted">Seu share</div><div class="font-medium">${my ? '$'+myShareUsd.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div></div>
+          <div><div class="text-xs text-muted">Posição</div><div class="font-medium text-xs">${my ? my.aAmt.toFixed(4)+' '+my.a+' + '+my.bAmt.toFixed(2)+' '+my.b : '—'}</div></div>
+          <div class="col-span-2">
+            <div class="text-xs text-muted mb-0.5">Composição</div>
+            <div class="h-2 rounded-full overflow-hidden flex" style="background:var(--border)">
+              <div style="width:52%;background:${tokenA.color}"></div>
+              <div style="width:48%;background:${tokenB.color}"></div>
+            </div>
+            <div class="flex justify-between text-[10px] text-muted mt-1"><span>${p.a} ~52%</span><span>${p.b} ~48%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function togglePoolDetail(idx) {
+  const el = document.getElementById('pool-detail-' + idx);
+  const btn = document.getElementById('pool-toggle-' + idx);
+  const open = !el.classList.contains('hidden');
+  el.classList.toggle('hidden', open);
+  btn.textContent = open ? 'Detalhes' : 'Ocultar';
+}
+function selectPool(a, b) {
+  liqTokenA = TOKENS.find(t => t.symbol === a);
+  liqTokenB = TOKENS.find(t => t.symbol === b);
+  renderLiqButtons();
+  document.getElementById('liq-a').value = ''; document.getElementById('liq-b').value = '';
+  document.getElementById('liq-info').classList.add('hidden'); updateLiqButton(false);
+}
+
+// Portfolio
+function renderPortfolio() {
+  const list = document.getElementById('portfolio-list');
+  const ethPrice = TOKENS.find(t => t.symbol === 'ETH')?.price || 0;
+  if (walletConnected && walletOnBase && onChainEthBalance !== null) {
+    const ethUsd = onChainEthBalance * ethPrice;
+    const usdcUsd = (onChainUsdcBalance || 0) * (TOKENS.find(t => t.symbol === 'USDC')?.price || 1);
+    let poolsUsd = 0;
+    const poolRows = myPools.map(p => {
+      const ta = TOKENS.find(t => t.symbol === p.a);
+      const tb = TOKENS.find(t => t.symbol === p.b);
+      const val = p.aAmt * (ta?.price || 0) + p.bAmt * (tb?.price || 0);
+      poolsUsd += val;
+      return `<div class="flex items-center gap-4 p-3 rounded-xl border" style="background:var(--bg-input);border-color:var(--border)">
+        <div class="flex -space-x-2">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">${p.aIcon}</div>
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">${p.bIcon}</div>
+        </div>
+        <div class="flex-1"><div class="font-semibold">${p.a}/${p.b}</div><div class="text-xs text-muted">Pool de teste · ${p.network || NETWORKS[currentNetwork].name}</div></div>
+        <div class="text-right"><div class="font-medium">≈ $${val.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
+        <div class="text-xs text-muted">${p.aAmt.toFixed(4)} + ${p.bAmt.toFixed(2)}</div></div>
+      </div>`;
+    }).join('');
+    const total = ethUsd + usdcUsd + poolsUsd;
+    document.getElementById('portfolio-total').textContent = total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const usdcRow = onChainUsdcBalance !== null ? `
+      <div class="flex items-center gap-4 p-3 rounded-xl border" style="background:var(--bg-input);border-color:var(--border)">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">$</div>
+        <div class="flex-1"><div class="font-semibold">USDC</div><div class="text-xs text-muted">${NETWORKS[currentNetwork].name} · on-chain</div></div>
+        <div class="text-right"><div class="font-medium">${onChainUsdcBalance.toFixed(6)}</div><div class="text-xs text-muted">≈ $${usdcUsd.toLocaleString(undefined,{maximumFractionDigits:2})}</div></div>
+      </div>` : '';
+    list.innerHTML = `
+      <div class="flex items-center gap-4 p-3 rounded-xl border" style="background:var(--bg-input);border-color:var(--border)">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">Ξ</div>
+        <div class="flex-1"><div class="font-semibold">ETH</div><div class="text-xs text-muted">${NETWORKS[currentNetwork].name} · on-chain</div></div>
+        <div class="text-right"><div class="font-medium">${onChainEthBalance.toFixed(6)}</div><div class="text-xs text-muted">≈ $${ethUsd.toLocaleString(undefined,{maximumFractionDigits:2})}</div></div>
+      </div>
+      ${usdcRow}
+      ${poolRows}
+      <p class="text-[10px] text-muted mt-3">${lang === 'pt' ? 'ETH vem da blockchain. Pools de teste ficam só neste navegador até integrarmos contratos LP.' : 'ETH is read on-chain. Test pools stay in this browser until LP contracts are integrated.'}</p>`;
+    return;
+  }
+  document.getElementById('portfolio-total').textContent = '—';
+  list.innerHTML = `<div class="text-sm text-muted text-center py-6">${walletConnected ? (lang === 'pt' ? 'Conecte a carteira à ' + NETWORKS[currentNetwork].name + ' para consultar o portfólio.' : 'Connect your wallet to ' + NETWORKS[currentNetwork].name + ' to read your portfolio.') : (lang === 'pt' ? 'Conecte sua carteira para visualizar os saldos reais.' : 'Connect your wallet to view real balances.')}</div>`;
+}
+function setChartType(type) {
+  chartType = type;
+  document.getElementById('chart-btn-doughnut').className = type === 'doughnut' ? 'px-2 py-1 rounded-lg tab-active' : 'px-2 py-1 rounded-lg text-muted';
+  document.getElementById('chart-btn-bar').className = type === 'bar' ? 'px-2 py-1 rounded-lg tab-active' : 'px-2 py-1 rounded-lg text-muted';
+  renderPortfolioChart();
+}
+function updateChartTheme() {
+  if (!portfolioChart) return;
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (portfolioChart.options.plugins?.legend?.labels) portfolioChart.options.plugins.legend.labels.color = isDark ? '#e5e5e5' : '#1a1a1a';
+}
+function renderPortfolioChart() {
+  const canvas = document.getElementById('portfolio-chart');
+  if (!canvas) return;
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js not loaded');
+    return;
+  }
+  if (portfolioChart) { portfolioChart.destroy(); portfolioChart = null; }
+
+  const ethPrice = TOKENS.find(t => t.symbol === 'ETH')?.price || 0;
+  const labels = [];
+  const data = [];
+  const colors = [];
+
+  if (walletConnected && walletOnBase && onChainEthBalance !== null && onChainEthBalance > 0) {
+    labels.push('ETH');
+    data.push(+(onChainEthBalance * ethPrice).toFixed(2));
+    colors.push('#627EEA');
+  }
+  if (walletConnected && walletOnBase && onChainUsdcBalance !== null && onChainUsdcBalance > 0) {
+    labels.push('USDC');
+    data.push(+((onChainUsdcBalance) * (TOKENS.find(t => t.symbol === 'USDC')?.price || 1)).toFixed(2));
+    colors.push('#2775CA');
+  }
+  myPools.forEach(p => {
+    const ta = TOKENS.find(t => t.symbol === p.a);
+    const tb = TOKENS.find(t => t.symbol === p.b);
+    const val = p.aAmt * (ta?.price || 0) + p.bAmt * (tb?.price || 0);
+    if (val > 0) {
+      labels.push(p.a + '/' + p.b);
+      data.push(+val.toFixed(2));
+      colors.push(ta?.color || '#00ff41');
+    }
+  });
+
+  if (!data.length) {
+    // empty state: draw nothing but keep canvas clean
+    const c = canvas.getContext('2d');
+    c && c.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const common = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: chartType === 'doughnut' ? 'right' : 'top',
+        labels: { color: isDark ? '#e5e5e5' : '#1a1a1a', boxWidth: 12, font: { size: 11 } }
+      },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => ` $${Number(ctx.raw).toLocaleString()}`
+        }
+      }
+    }
+  };
+
+  if (chartType === 'doughnut') {
+    portfolioChart = new Chart(canvas, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+      options: { ...common, cutout: '60%' }
+    });
+  } else {
+    portfolioChart = new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 6 }] },
+      options: {
+        ...common,
+        plugins: { ...common.plugins, legend: { display: false } },
+        scales: {
+          x: { ticks: { color: isDark ? '#888' : '#666' }, grid: { display: false } },
+          y: { ticks: { color: isDark ? '#888' : '#666' }, grid: { color: isDark ? '#222' : '#e0e0e0' } }
+        }
+      }
+    });
+  }
+}
+
+// Token modal
+function openModal(target) {
+  modalTarget = target;
+  document.getElementById('token-search').value = '';
+  renderTokenList();
+  document.getElementById('token-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('token-search').focus(), 80);
+}
+function closeModal() { document.getElementById('token-modal').classList.add('hidden'); modalTarget = null; }
+function filterTokens() { renderTokenList(); }
+function renderTokenList() {
+  const search = (document.getElementById('token-search').value || '').toLowerCase();
+  const list = document.getElementById('token-list'); list.innerHTML = '';
+  let exclude = null;
+  if (modalTarget === 'from') exclude = toToken.symbol;
+  if (modalTarget === 'to') exclude = fromToken.symbol;
+  if (modalTarget === 'liqA') exclude = liqTokenB.symbol;
+  if (modalTarget === 'liqB') exclude = liqTokenA.symbol;
+  TOKENS.filter(t => {
+    if (t.symbol === exclude) return false;
+    if (!search) return true;
+    return t.symbol.toLowerCase().includes(search) || t.name.toLowerCase().includes(search);
+  }).forEach(token => {
+    const btn = document.createElement('button');
+    btn.className = 'w-full flex items-center gap-3 p-3 rounded-xl transition-colors';
+    btn.onmouseover = () => btn.style.background = 'var(--bg-hover)';
+    btn.onmouseout = () => btn.style.background = 'transparent';
+    btn.onclick = () => selectToken(token);
+    btn.innerHTML = `
+      <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold" style="color:var(--neon);border:1px solid color-mix(in srgb,var(--neon) 40%,transparent);background:color-mix(in srgb,var(--neon) 15%,transparent)">${token.icon}</div>
+      <div class="flex-1 text-left"><div class="font-semibold">${token.symbol}</div><div class="text-xs text-muted">${token.name}${token.cg?'':' · stock'}</div></div>
+      <div class="text-right"><div class="text-sm">$${token.price.toLocaleString()}</div>
+      <div class="text-xs" style="color:${token.change24h>=0?'var(--neon)':'#ef4444'}">${token.change24h>=0?'+':''}${token.change24h}%</div></div>`;
+    list.appendChild(btn);
+  });
+}
+function selectToken(token) {
+  if (modalTarget === 'from') { fromToken = token; renderTokenButtons(); if (document.getElementById('from-amount').value) updateFromAmount(); renderPriceChart(); }
+  else if (modalTarget === 'to') { toToken = token; renderTokenButtons(); if (document.getElementById('from-amount').value) updateFromAmount(); renderPriceChart(); }
+  else if (modalTarget === 'liqA') { liqTokenA = token; renderLiqButtons(); if (document.getElementById('liq-a').value) updateLiqA(); }
+  else if (modalTarget === 'liqB') { liqTokenB = token; renderLiqButtons(); if (document.getElementById('liq-a').value) updateLiqA(); }
+  closeModal();
+}
+
+function showToast(msg, type='success') {
+  const el = document.getElementById('toast');
+  el.style.background = type === 'success' ? 'var(--neon)' : '#ef4444';
+  el.style.color = type === 'success' ? '#000' : '#fff';
+  el.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] toast px-5 py-3 rounded-xl text-sm font-medium shadow-lg';
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+// Init
+initTheme();
+loadState();
+const networkV2 = localStorage.getItem('neonswap-network-v2');
+const savedNetwork = localStorage.getItem('neonswap-network');
+if (!networkV2) {
+  selectNetwork('base-sepolia');
+  localStorage.setItem('neonswap-network-v2', '1');
+} else {
+  selectNetwork(['base', 'base-sepolia'].includes(savedNetwork) ? savedNetwork : 'base-sepolia');
+}
+applyI18n();
+renderTokenButtons();
+renderLiqButtons();
+renderMyPools();
+renderHistory();
+renderPortfolio();
+renderPools();
+renderPriceChart();
+fetchPrices();
+setInterval(fetchPrices, 60000);
+</script>
+</body>
+</html>
